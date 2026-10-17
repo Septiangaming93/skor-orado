@@ -1,0 +1,206 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Papan Skor Orado - Bakom Domino Club</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font-family:Arial,sans-serif}
+.app{width:100%;max-width:650px;margin:auto;padding:4px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th,td{border:1px solid #222;text-align:center;padding:0}
+thead th{height:70px;color:white}
+.head-balak{background:#fff0c4;color:#000;width:15%;font-size:14px;font-weight:bold}
+.blue{background:#4089c7;color:white}
+.red{background:#ff0808;color:white}
+.vs{background:#666;color:white;width:12%;font-size:22px;font-weight:bold}
+.team-label{font-size:12px;display:block;margin-top:5px}
+.team-name{font-size:clamp(25px,7vw,38px);font-weight:bold;display:block}
+tbody td{height:27px;font-weight:bold}
+tbody .balak{background:#fff0c4;color:#000;width:15%}
+tbody .blue-cell{background:#4089c7;color:white}
+tbody .red-cell{background:#ff0808;color:white}
+tbody .vs-cell{background:#666;color:white;font-weight:normal}
+.score{width:100%;height:26px;border:0;background:transparent;text-align:center;font-size:14px;font-weight:bold;color:inherit;padding:0;outline:none}
+.score::placeholder{color:inherit;opacity:.8}
+.bottom{display:grid;grid-template-columns:15% 38% 12% 35%;text-align:center}
+.total-label{height:22px;background:#ff9800;color:#000}
+.total{font-size:clamp(50px,15vw,88px);height:110px;line-height:110px;font-weight:bold;color:white}
+.total-blue{background:#4089c7}
+.total-red{background:#ff0808}
+.total-vs{background:#666}
+.next{background:#ff9800;padding:5px 0 0;text-align:center}
+.next-label{font-size:14px}
+.next-number{font-size:34px;margin-top:3px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;padding:12px 2px}
+button{border:0;border-radius:6px;padding:11px 14px;font-size:14px;font-weight:bold;cursor:pointer}
+.primary{background:#1976d2;color:white}
+.secondary{background:#eee;color:#222}
+.hint{font-size:12px;color:#555;padding:0 4px 12px;line-height:1.5}
+@media(min-width:500px){
+ .app{padding:8px}
+ tbody td{height:29px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<table>
+<thead>
+<tr>
+<th class="head-balak">BALAK<br>(GAME)</th>
+<th class="blue">
+<span class="team-label">point team</span>
+<span class="team-name">BIRU</span>
+</th>
+<th class="vs">VS</th>
+<th class="red">
+<span class="team-label">point team</span>
+<span class="team-name">MERAH</span>
+</th>
+</tr>
+</thead>
+<tbody id="rows"></tbody>
+</table>
+
+<div class="bottom">
+<div class="total-label"></div>
+<div class="total total-blue" id="totalBlue">0</div>
+<div class="total total-vs"></div>
+<div class="total total-red" id="totalRed">0</div>
+</div>
+<div class="next">
+<div class="next-label">BALAK SELANJUTNYA</div>
+<div class="next-number" id="nextBalak">0</div>
+</div>
+
+<div class="controls">
+<button class="primary" onclick="downloadData()">Simpan skor</button>
+<button class="secondary" onclick="undoLast()">Urungkan</button>
+<button class="secondary" onclick="resetGame()">Reset permainan</button>
+</div>
+<div class="hint">
+Isi poin dengan angka. Tekan tombol <b>−</b> pada suatu tim jika ronde tersebut selesai tetapi tim itu tidak mendapat poin. Sel kosong berarti ronde belum diputuskan. Total skor dan balak berikutnya dihitung otomatis. Data tersimpan di browser perangkat ini.
+</div>
+</div>
+<script>
+const KEY='bakom-orado-skor-v1';
+let data=loadData();
+let history=[];
+
+function emptyData(){
+ return Array.from({length:14},(_,i)=>({
+   balak:i%7, blue:'', red:''
+ }));
+}
+function loadData(){
+ try{
+  const saved=localStorage.getItem(KEY);
+  if(saved){
+   const parsed=JSON.parse(saved);
+   if(Array.isArray(parsed)&&parsed.length===14)return parsed;
+  }
+ }catch(e){}
+ return emptyData();
+}
+function save(){
+ try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}
+}
+function snapshot(){history.push(JSON.stringify(data));if(history.length>30)history.shift()}
+function validScore(v){return v!==''&&v!=='-'&&Number.isFinite(Number(v))}
+function total(team){
+ return data.reduce((sum,r)=>sum+(validScore(r[team])?Number(r[team]):0),0);
+}
+function nextBalak(){
+ // Balak aktif adalah baris pertama yang belum selesai.
+ const row=data.find(r=>r.blue===''||r.red==='');
+ return row?row.balak:'Selesai';
+}
+function render(){
+ const body=document.getElementById('rows');
+ body.innerHTML='';
+ data.forEach((r,i)=>{
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+   <td class="balak">${r.balak}</td>
+   <td class="blue-cell"></td>
+   <td class="vs-cell">-</td>
+   <td class="red-cell"></td>`;
+  addScoreInput(tr.cells[1],i,'blue','blue');
+  addScoreInput(tr.cells[3],i,'red','red');
+  body.appendChild(tr);
+ });
+ document.getElementById('totalBlue').textContent=total('blue');
+ document.getElementById('totalRed').textContent=total('red');
+ document.getElementById('nextBalak').textContent=nextBalak();
+}
+function addScoreInput(cell,i,team,cls){
+ const wrap=document.createElement('div');
+ wrap.style.display='flex';
+ wrap.style.alignItems='center';
+ const input=document.createElement('input');
+ input.className='score';
+ input.inputMode='decimal';
+ input.autocomplete='off';
+ input.setAttribute('aria-label',`Balak ${data[i].balak}, poin ${team}`);
+ input.placeholder=data[i][team]===''?'':'';
+ input.value=data[i][team];
+ input.style.flex='1';
+ input.addEventListener('focus',()=>{input.dataset.old=input.value});
+ input.addEventListener('change',()=>{
+  const v=input.value.trim();
+  if(v!==''&&v!=='-'&&(!Number.isFinite(Number(v))||Number(v)<0)){
+   alert('Masukkan angka positif atau tanda -.');
+   input.value=data[i][team];return;
+  }
+  snapshot();
+  data[i][team]=v;
+  save();render();
+ });
+ input.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){input.blur()}
+ });
+ const dash=document.createElement('button');
+ dash.textContent='−';
+ dash.title='Tandai selesai tanpa poin';
+ dash.style.cssText='padding:0;width:22px;height:24px;border-radius:0;background:transparent;color:inherit;font-size:17px';
+ dash.addEventListener('click',()=>{
+  snapshot();data[i][team]='-';save();render();
+ });
+ const clear=document.createElement('button');
+ clear.textContent='×';
+ clear.title='Kosongkan poin';
+ clear.style.cssText='padding:0;width:18px;height:24px;border-radius:0;background:transparent;color:inherit;font-size:16px';
+ clear.addEventListener('click',()=>{
+  snapshot();data[i][team]='';save();render();
+ });
+ wrap.append(input,dash,clear);
+ cell.appendChild(wrap);
+}
+function undoLast(){
+ if(!history.length){alert('Belum ada perubahan untuk diurungkan.');return}
+ data=JSON.parse(history.pop());save();render();
+}
+function resetGame(){
+ if(!confirm('Hapus semua poin dan mulai permainan baru?'))return;
+ snapshot();data=emptyData();save();render();
+}
+function downloadData(){
+ const text=[
+  'BALAK,BIRU,MERAH',
+  ...data.map(r=>`${r.balak},${r.blue},${r.red}`),
+  `TOTAL,${total('blue')},${total('red')}`,
+  `BALAK SELANJUTNYA,${nextBalak()}`
+ ].join('\n');
+ const blob=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8;'});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;a.download='skor-orado.csv';a.click();
+ URL.revokeObjectURL(url);
+}
+render();
+</script>
+</body>
+</html>
